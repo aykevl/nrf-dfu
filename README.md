@@ -1,6 +1,6 @@
 # Bootloader/DFU
 
-This is a small bootloader/DFU (device firmware updater) for nRF5x chips that
+This is a small bootloader/DFU (device firmware updater) for nRF52 chips that
 can do over-the-air firmware updates. It works at least on the  nRF52832 with
 s132, but other chips/SoftDevices will be easy to add or may already work. The
 main advantage (besides its very small size) is that this DFU can be installed
@@ -14,40 +14,56 @@ system but the main thing it does is simply forwarding interrupts.
 
 A feature (which as far as I'm aware doesn't exist in other nRF5x bootloaders)
 is that it can also be stored in the MBR region. In this mode, it receives all
-interrupts but forwards all of them to the SoftDevice (except for the reset
-handler). MBR SVCalls and other bootloaders are not (yet) supported when
-installed this way. The advantage is that it doesn't take up any extra space as
-the MBR is a required system component of recent SoftDevices.
+interrupts but forwards them to either the SoftDevice or the application,
+depending on the interrupt. MBR SVCalls and other bootloaders are not (yet)
+supported when installed this way, but that functionality is already supported
+by the DFU so it's not a big loss.
 
-This is the best supported configuration. It appears to work reliably and
-doesn't seem to affect SoftDevice operation.
+While this appears to work, be aware that this is probably outside of the
+SoftDevice spec and may break.
 
 ## DFU in bootloader
 
 Originally this DFU was written as a conventional bootloader, targeting a code
-size of ≤1kB (the flash page erase size of nRF51 chips).
+size of ≤1kB (the flash page erase size of nRF51 chips). This is still a
+supported configuration, if not for easier debugging if 4kB is too small for a
+debug-enabled build.
 
 ## Usage
 
-In normal operation, it immediately jumps to the application. But when the
-application sets the `GPREGRET` register to non-zero and resets, the DFU starts
-a BLE service to do an OTA firmware update.
+In normal operation, it immediately jumps to the application if there is one.
+But when the application sets the `GPREGRET` register to non-zero and resets,
+the DFU starts a BLE service to do an OTA firmware update.
 
 ## Installing
+
+Download the code:
+
+    git clone --recursive https://github.com/aykevl/nrf-dfu.git
+
+Build and flash:
+
+    make flash
+
+This will flash both the new MBR and the SoftDevice, erasing whatever used to be
+there on the chip.
 
 Some notes:
 
   * For MBR mode, if you flash the DFU manually, you have to flash it *after*
     flashing the SoftDevice as it overwrites a part of the SoftDevice. So on
-    every SoftDevice update, you'll need to re-flash the DFU.
+    every SoftDevice update, you'll need to re-flash the DFU. Or you can merge
+    the SoftDevice and the custom MBR with the provided `mergehex.py` utility.
   * For bootloader mode to work, a UICR register needs to be set. This register
-    is part of the .hex file and will be set at a flash so you can usually just
-    ignore it. However, if you move or remove the bootloader you'll need to
-    erase this register (which usually means erasing the whole flash).
+    is part of the bootloader .hex file and will be set at a flash so you can
+    usually just ignore it. However, if you move or remove the bootloader you'll
+    need to erase this register (which usually means erasing the whole flash).
   * This should be obvious, but the DFU depends on a functioning SoftDevice.
-    This means, for example, that you cannot update the SoftDevice using the DFU
-    (but it should be possible to work around that by writing an application
-    that overwrites the SoftDevice at first run).
+    This means, for example, that you cannot update the SoftDevice using the
+    DFU. However, it should be possible to work around this by flasing in two
+    phases: once with an application that on the first run updates the
+    SoftDevice and again with the application. The MBR cannot directly be
+    updated.
 
 ## Bluetooth API
 
@@ -55,7 +71,7 @@ It advertizes a service (`67fc0001-83ae-f58c-f84b-ba72efb822f4`) with two
 characteristics: an info characteristic with various parameters (flash size,
 page size, application start address, etc.) and a write/notify characteristic
 for calls and return values. With that, an application can erase pages and write
-new pages. Finally, it can call a reset to enter the bootloader.
+new pages. Finally, it can call a reset to enter the application.
 
 Note that the protocol also includes an internal buffer as big as a flash page.
 It can be written to using the buffer characteristic or the buffer command, and
@@ -113,7 +129,7 @@ as long as the first page of the firmware (the ISR vector) is cleared.
 To get to this low size, some optimizations are implemented, some of which
 are somewhat dangerous.
 
-  * Code immediately follows the ISR vector.
+  * Code immediately follows the ISR vector with no reserved space.
   * Product anomalies are ignored. If they are relevant to the bootloader, they
     can be implemented.
   * Memory regions are not enabled by default. With the initial values (after
