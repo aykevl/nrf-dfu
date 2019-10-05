@@ -1,11 +1,12 @@
 # Bootloader/DFU
 
 This is a small bootloader/DFU (device firmware updater) for nRF5x chips that
-can do over-the-air firmware updates. It works at least on the nRF51822 with
-s110 and on nRF52832 with s132, but other chips/SoftDevices will be easy to add
-or may already work. The main advantage (besides its very small size) is that
-this DFU can be installed to the MBR region of the SoftDevice, not just in the
-bootloader area like the official [Nordic DFU example](https://infocenter.nordicsemi.com/index.jsp?topic=%2Fcom.nordic.infocenter.sdk5.v14.1.0%2Fexamples_bootloader.html&cp=4_0_0_4_4).
+can do over-the-air firmware updates. It works at least on the  nRF52832 with
+s132, but other chips/SoftDevices will be easy to add or may already work. The
+main advantage (besides its very small size) is that this DFU can be installed
+to the MBR region of the SoftDevice, not just in the bootloader area like the
+official [Nordic DFU
+example](https://infocenter.nordicsemi.com/index.jsp?topic=%2Fcom.nordic.infocenter.sdk5.v14.1.0%2Fexamples_bootloader.html&cp=4_0_0_4_4).
 There it won't take up any extra space as the MBR is a required component of the
 system but the main thing it does is simply forwarding interrupts.
 
@@ -24,8 +25,7 @@ doesn't seem to affect SoftDevice operation.
 ## DFU in bootloader
 
 Originally this DFU was written as a conventional bootloader, targeting a code
-size of ≤1kB (the flash page erase size of nRF51 chips). It should still work,
-but hasn't been well maintained.
+size of ≤1kB (the flash page erase size of nRF51 chips).
 
 ## Usage
 
@@ -125,13 +125,6 @@ For bootloader mode, some other optimizations have been implemented:
   * The ISR vector is shortened to 4 words, saving a lot of space. This includes
     the initial stack pointer and the HardFault handler. Other interrupts should
     not happen, I hope.
-  * There is no `.data` section on the nRF51. Instead, all global values should
-    either be constant (stored in `.text` in flash) or zero (stored in `.bss`
-    and initialized by the startup code). The `.bss` segment is initialized,
-    however. Most of the time, avoiding gobal non-const data saves code size
-    anyway.  
-    For MBR mode, it cannot use data in flash as the SoftDevice won't accept
-    addresses in that area (< 0x1000), so they all have to be stored in RAM.
 
 Still, there are some more optimizations that can be done to get to a lower
 size:

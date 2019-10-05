@@ -28,9 +28,9 @@
 #include "ble.h"
 #include "nrf_sdm.h"
 #include "nrf_mbr.h"
-#include "dfu/dfu.h"
-#include "dfu/dfu_ble.h"
-#include "dfu/dfu_uart.h"
+#include "dfu.h"
+#include "dfu_ble.h"
+#include "dfu_uart.h"
 
 #define MSEC_TO_UNITS(TIME, RESOLUTION) (((TIME) * 1000) / (RESOLUTION))
 #define UNIT_0_625_MS (625)
@@ -54,12 +54,12 @@
 #define UUID_DFU_CHAR_COMMAND 0x0003
 #define UUID_DFU_CHAR_BUFFER  0x0004
 
-static MBRCONST ble_uuid128_t uuid_base = {
+static ble_uuid128_t uuid_base = {
     UUID_BASE,
 };
 
-static MBRCONST uint8_t device_name[] = DEVICE_NAME;
-static MBRCONST struct {
+static uint8_t device_name[] = DEVICE_NAME;
+static struct {
     uint8_t flags_len;
     uint8_t flags_type;
     uint8_t flags_value;
@@ -81,44 +81,47 @@ static MBRCONST struct {
     UUID_BASE,
 };
 
-static ble_enable_params_t ble_enable_params = {
-    #if NRF52
-    .common_enable_params.p_conn_bw_counts = NULL,
-    .common_enable_params.vs_uuid_count = 1,
-    .gap_enable_params.periph_conn_count = 1,
-    .gap_enable_params.central_conn_count = 0,
-    .gap_enable_params.central_sec_count = 0,
-    .gap_enable_params.p_device_name = NULL,
-    .gatt_enable_params.att_mtu = 0, // default
-    #endif
-    .gatts_enable_params.service_changed = 0,
-    .gatts_enable_params.attr_tab_size = BLE_GATTS_ATTR_TAB_SIZE_DEFAULT,
+static ble_gap_adv_data_t m_adv_data = {
+    .adv_data = {
+        .p_data = (uint8_t*)&adv_data,
+        .len = sizeof(adv_data),
+    },
 };
 
-static MBRCONST ble_gap_conn_params_t gap_conn_params = {
+static ble_gap_conn_params_t gap_conn_params = {
     .min_conn_interval = BLE_MIN_CONN_INTERVAL,
     .max_conn_interval = BLE_MAX_CONN_INTERVAL,
     .slave_latency     = BLE_SLAVE_LATENCY,
     .conn_sup_timeout  = BLE_CONN_SUP_TIMEOUT,
 };
 
-static MBRCONST ble_gap_conn_sec_mode_t sec_mode = {
+static ble_gap_conn_sec_mode_t sec_mode = {
     // Values as set with:
     // BLE_GAP_CONN_SEC_MODE_SET_OPEN(&sec_mode);
     .sm = 1,
     .lv = 1,
 };
 
-static MBRCONST ble_gap_adv_params_t m_adv_params = {
-    .type        = BLE_GAP_ADV_TYPE_ADV_IND,            // connectable
-    .p_peer_addr = NULL,                                // undirected advertisement
-    .fp          = BLE_GAP_ADV_FP_ANY,
-    .interval    = MSEC_TO_UNITS(100, UNIT_0_625_MS),   // approx 100ms
-    .timeout     = 0,                                   // infinite advertisment
+static ble_gap_adv_params_t m_adv_params = {
+    .properties = {
+        .type             = BLE_GAP_ADV_TYPE_CONNECTABLE_SCANNABLE_UNDIRECTED,
+        .anonymous        = 0,
+        .include_tx_power = 0,
+    },
+    .p_peer_addr = NULL,
+    .interval    = MSEC_TO_UNITS(100, UNIT_0_625_MS), // approx 100ms
+    .duration    = 0,    // unlimited advertisement?
+    .max_adv_evts = 0,   // no max advertisement events
+    .channel_mask = {0}, // ?
+    .filter_policy = BLE_GAP_ADV_FP_ANY,
+    .primary_phy = BLE_GAP_PHY_AUTO,
+    .secondary_phy = BLE_GAP_PHY_AUTO,
+    .set_id = 0,
+    .scan_req_notification = 0,
 };
 
 // Value of the 'info' characteristic.
-static MBRCONST struct {
+static struct {
     uint8_t  version;
     uint8_t  pagesize;         // as a log2, actual page size is 2^pagesize
     uint16_t number_of_pages;
@@ -129,18 +132,14 @@ static MBRCONST struct {
     1,
     PAGE_SIZE_LOG2,
     FLASH_SIZE /  PAGE_SIZE, // will be updated when DYNAMIC_INFO_CHAR is set
-#if NRF51
-    {'N', '5', '1', 'a'}, // nRF51, 'serial number' a (if ever needed)
-#elif NRF52
     {'N', '5', '2', 'a'}, // nRF52, 'serial number' a (if ever needed)
-#endif
     APP_CODE_BASE / PAGE_SIZE, // will be updated when DYNAMIC_INFO_CHAR is set
     (APP_CODE_END / PAGE_SIZE) - (APP_CODE_BASE / PAGE_SIZE), // same for this one
 };
 
 static ble_uuid_t uuid;
 
-static MBRCONST ble_gatts_attr_md_t attr_md_readonly = {
+static ble_gatts_attr_md_t attr_md_readonly = {
     .vloc    = BLE_GATTS_VLOC_STACK,
     .rd_auth = 0,
     .wr_auth = 0,
@@ -154,7 +153,7 @@ static MBRCONST ble_gatts_attr_md_t attr_md_readonly = {
     },
 };
 
-static MBRCONST ble_gatts_attr_md_t attr_md_writeonly = {
+static ble_gatts_attr_md_t attr_md_writeonly = {
     .vloc    = BLE_GATTS_VLOC_STACK,
     .rd_auth = 0,
     .wr_auth = 0,
@@ -168,7 +167,7 @@ static MBRCONST ble_gatts_attr_md_t attr_md_writeonly = {
     },
 };
 
-static MBRCONST ble_gatts_attr_t attr_char_info = {
+static ble_gatts_attr_t attr_char_info = {
     .p_uuid    = &uuid,
     .p_attr_md = (ble_gatts_attr_md_t*)&attr_md_readonly,
     .init_len  = sizeof(char_info_value),
@@ -177,7 +176,7 @@ static MBRCONST ble_gatts_attr_t attr_char_info = {
     .max_len   = sizeof(char_info_value),
 };
 
-static MBRCONST ble_gatts_attr_t attr_char_write = {
+static ble_gatts_attr_t attr_char_write = {
     .p_uuid    = &uuid,
     .p_attr_md = (ble_gatts_attr_md_t*)&attr_md_writeonly,
     .init_len  = 0,
@@ -186,7 +185,7 @@ static MBRCONST ble_gatts_attr_t attr_char_write = {
     .max_len   = (GATT_MTU_SIZE_DEFAULT - 3),
 };
 
-static MBRCONST ble_gatts_char_md_t char_md_readonly = {
+static ble_gatts_char_md_t char_md_readonly = {
     .char_props.broadcast      = 0,
     .char_props.read           = 1,
     .char_props.write_wo_resp  = 0,
@@ -201,7 +200,7 @@ static MBRCONST ble_gatts_char_md_t char_md_readonly = {
     .p_cccd_md         = NULL,
 };
 
-static MBRCONST ble_gatts_char_md_t char_md_write_notify = {
+static ble_gatts_char_md_t char_md_write_notify = {
     .char_props.broadcast      = 0,
     .char_props.read           = 0,
     .char_props.write_wo_resp  = 0,
@@ -217,7 +216,7 @@ static MBRCONST ble_gatts_char_md_t char_md_write_notify = {
 };
 
 #if PACKET_CHARACTERISTIC
-static MBRCONST ble_gatts_char_md_t char_md_write_wo_resp = {
+static ble_gatts_char_md_t char_md_write_wo_resp = {
     .char_props.broadcast      = 0,
     .char_props.read           = 0,
     .char_props.write_wo_resp  = 1,
@@ -238,20 +237,16 @@ ble_gatts_char_handles_t char_buffer_handles;
 
 static uint16_t ble_command_conn_handle;
 
-#if !NRF51
-static MBRCONST uint32_t app_ram_base = APP_RAM_BASE;
-#endif
+static uint32_t app_ram_base = APP_RAM_BASE;
+
+static uint8_t adv_handle;
 
 void ble_init(void) {
     LOG("enable ble");
 
     // Enable BLE stack.
 
-    #if NRF51
-    uint32_t err_code = sd_ble_enable(&ble_enable_params);
-    #else
-    uint32_t err_code = sd_ble_enable(&ble_enable_params, &app_ram_base);
-    #endif
+    uint32_t err_code = sd_ble_enable(&app_ram_base);
     if (err_code != 0) {
         LOG_NUM("cannot enable BLE:", err_code);
     }
@@ -267,11 +262,11 @@ void ble_init(void) {
         LOG("cannot set PPCP parameters");
     }
 
-    if (sd_ble_gap_adv_data_set((const uint8_t*)&adv_data, sizeof(adv_data), NULL, 0) != 0) {
-        LOG("cannot apply advertisment data");
+    // start advertising
+    if (sd_ble_gap_adv_set_configure(&adv_handle, &m_adv_data, &m_adv_params) != 0) {
+        LOG("cannot configure advertisment");
     }
-
-    if (sd_ble_gap_adv_start(&m_adv_params) != 0) {
+    if (sd_ble_gap_adv_start(adv_handle, BLE_CONN_CFG_TAG_DEFAULT) != 0) {
         LOG("cannot start advertisment");
     }
 
@@ -288,8 +283,6 @@ void ble_init(void) {
     }
 
     // Load values for 'info' characteristic.
-    // If this fails (nRF51 in bootloader mode), disable
-    // DYNAMIC_INFO_CHAR.
     #if DYNAMIC_INFO_CHAR
     char_info_value.number_of_pages = NRF_FICR->CODESIZE;
     char_info_value.app_first_page = SD_SIZE_GET(MBR_SIZE) / PAGE_SIZE;
@@ -385,7 +378,7 @@ static void ble_evt_handler(ble_evt_t * p_ble_evt) {
 
         case BLE_GAP_EVT_DISCONNECTED: {
             LOG("ble: disconnected");
-            if (sd_ble_gap_adv_start(&m_adv_params) != 0) {
+            if (sd_ble_gap_adv_start(adv_handle, BLE_CONN_CFG_TAG_DEFAULT) != 0) {
                 LOG("Could not restart advertising after disconnect.");
             }
             break;
@@ -423,25 +416,7 @@ static void ble_evt_handler(ble_evt_t * p_ble_evt) {
         }
 
         case BLE_GAP_EVT_CONN_PARAM_UPDATE: {
-            LOG("ble: conn param update");
-            if (p_ble_evt->evt.gap_evt.params.conn_param_update.conn_params.min_conn_interval > 10) {
-                LOG("  > 10");
-            }
-            if (p_ble_evt->evt.gap_evt.params.conn_param_update.conn_params.min_conn_interval > 20) {
-                LOG("  > 20");
-            }
-            if (p_ble_evt->evt.gap_evt.params.conn_param_update.conn_params.min_conn_interval > 30) {
-                LOG("  > 30");
-            }
-            if (p_ble_evt->evt.gap_evt.params.conn_param_update.conn_params.min_conn_interval > 40) {
-                LOG("  > 40");
-            }
-            if (p_ble_evt->evt.gap_evt.params.conn_param_update.conn_params.min_conn_interval > 50) {
-                LOG("  > 50");
-            }
-            if (p_ble_evt->evt.gap_evt.params.conn_param_update.conn_params.min_conn_interval > 100) {
-                LOG("  > 100");
-            }
+            LOG_NUM("ble: conn param update", p_ble_evt->evt.gap_evt.params.conn_param_update.conn_params.min_conn_interval);
             break;
         }
 
@@ -455,10 +430,6 @@ static void ble_evt_handler(ble_evt_t * p_ble_evt) {
             sd_ble_gatts_exchange_mtu_reply(p_ble_evt->evt.gatts_evt.conn_handle, GATT_MTU_SIZE_DEFAULT);
             break;
 #endif
-
-        case BLE_EVT_TX_COMPLETE:
-            //LOG("ble: tx complete");
-            break;
 
 #if NRF52
         case BLE_GAP_EVT_ADV_REPORT:

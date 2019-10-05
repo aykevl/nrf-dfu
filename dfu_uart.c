@@ -25,7 +25,6 @@
 
 #include "nrf_uart.h"
 #include "dfu.h"
-#include "mpconfigboard.h"
 #include "dfu_uart.h"
 
 

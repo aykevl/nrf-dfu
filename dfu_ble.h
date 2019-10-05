@@ -26,6 +26,10 @@
 #pragma once
 
 void ble_init(void);
+
+__attribute__((noreturn))
 void ble_run(void);
 
 void ble_send_reply(uint8_t code);
+
+#define GATT_MTU_SIZE_DEFAULT (23)

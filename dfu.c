@@ -27,13 +27,10 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "mpconfigport.h"
 #include "nrf_sdm.h"
 #include "nrf_mbr.h"
 #include "nrf_soc.h"
-#if NRF52
 #include "nrf_nvic.h"
-#endif
 
 #include "dfu.h"
 #include "dfu_ble.h"
@@ -44,21 +41,15 @@ const uint32_t *bootloaderaddr = BOOTLOADER_START_ADDR;
 #endif
 
 #if DEBUG
-#if NRF51
-static void softdevice_assert_handler(uint32_t pc, uint16_t line_number, const uint8_t * p_file_name) {
-#else
-static void softdevice_assert_handler(uint32_t id, uint32_t pc, uint32_t info) {
-#endif
+// Stored in RAM so that the SoftDevice won't reject the low address.
+__attribute__((section(".softdevice_assert_handler")))
+void softdevice_assert_handler(uint32_t id, uint32_t pc, uint32_t info) {
     LOG("ERROR: SoftDevice assert!!!");
     while (1);
 }
-#else
-void HardFault_Handler(void);
-#if NRF51
-#define softdevice_assert_handler ((softdevice_assertion_handler_t)HardFault_Handler)
-#else
-#define softdevice_assert_handler ((nrf_fault_handler_t)HardFault_Handler)
-#endif
+#else // no debug
+void Default_Handler(void);
+#define softdevice_assert_handler ((nrf_fault_handler_t)Default_Handler)
 #endif
 
 static void jump_to_app() {
@@ -94,15 +85,6 @@ static void jump_to_app() {
 uint8_t flash_buf[PAGE_SIZE];
 uint8_t *flash_buf_ptr;
 
-#if !NRF51
-static MBRCONST nrf_clock_lf_cfg_t clock_config = {
-    .source = NRF_CLOCK_LF_SRC_SYNTH,
-    .rc_ctiv = 0,
-    .rc_temp_ctiv = 0,
-    .xtal_accuracy = 0,
-};
-#endif
-
 void _start(void) {
 #if DEBUG
     uart_enable();
@@ -116,6 +98,8 @@ void _start(void) {
     *(uint32_t*)MBR_VECTOR_TABLE = 0;
 #elif defined(DFU_TYPE_bootloader)
     *(uint32_t*)MBR_VECTOR_TABLE = SD_CODE_BASE;
+#else
+    #error Unknown DFU type
 #endif
 
 
@@ -140,15 +124,20 @@ void _start(void) {
     // setting this register (it defaults to 0).
     NRF_POWER->GPREGRET = 0;
 
+    // Try to disable the SoftDevice, if it is enabled. Sometimes it
+    // appears to not be fully disabled even after a reset.
+    // This adds almost no code size (4 bytes, could be shrunk to 2 bytes
+    // theoretically) but makes the DFU more reliable.
+    sd_softdevice_disable();
+
     // This always uses the internal clock. Which takes more power, but
     // DFU mode isn't meant to be enabled for long periods anyway. It
     // avoids having to configure internal/external clocks.
     LOG("enable sd");
-    #if NRF51
-    sd_softdevice_enable(NRF_CLOCK_LFCLKSRC_RC_250_PPM_250MS_CALIBRATION, softdevice_assert_handler);
-    #else
-    sd_softdevice_enable(&clock_config, softdevice_assert_handler);
-    #endif
+    uint32_t err_code = sd_softdevice_enable(NULL, softdevice_assert_handler);
+    if (err_code != 0) {
+        LOG_NUM("cannot enable SoftDevice:", err_code);
+    }
 
     // Enable IRQ for SoftDevice.
     // Disabled as it is not necessary as all events are handled in

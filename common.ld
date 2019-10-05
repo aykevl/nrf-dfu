@@ -33,6 +33,10 @@ SECTIONS
         _sdata = .;        /* create a global symbol at data start; used by startup code in order to initialise the .data section in RAM */
         *(.data)           /* .data sections */
         *(.data*)          /* .data* sections */
+        /* These two are stored in .data to allow them to be used as SoftDevice
+         * assert handlers. */
+        *(.softdevice_assert_handler)
+        *(.Default_Handler)
 
         . = ALIGN(4);
         _edata = .;        /* define a global symbol at data end; used by startup code in order to initialise the .data section in RAM */

@@ -24,6 +24,8 @@
 
 #pragma once
 
+#include <stdint.h>
+
 void uart_enable();
 void uart_disable();
 void uart_write(char *s);

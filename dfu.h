@@ -25,10 +25,11 @@
 
 #pragma once
 
-#include "mpconfigboard.h"
 #include "dfu_uart.h"
 
+#if !defined(DEBUG)
 #define DEBUG                  (0)
+#endif
 #define INPUT_CHECKS           (1) // whether the received buffer is the correct length
 #define FLASH_PAGE_CHECKS      (1) // check that flash pages are within the app area
 #define ERROR_REPORTING        (1) // send error when something goes wrong (e.g. flash write fail)
@@ -49,16 +50,9 @@ extern const uint32_t _stext[];
 #define SD_CODE_BASE           (0x00001000)
 #define MBR_VECTOR_TABLE       (0x20000000)
 
-#if NRF51
-#define APP_CODE_BASE          (0x00018000)
-#define APP_RAM_BASE           (0x20002000)
-#define PAGE_SIZE              (1024)
-#define PAGE_SIZE_LOG2         (10)
-#define FLASH_SIZE             (0x00040000) // 256kB - nearly all of them are 256kB
-
-#elif NRF52
-#define APP_CODE_BASE          (0x0001F000) // TODO: check SD version
-#define APP_RAM_BASE           (0x20002800)
+#if NRF52832_XXAA || NRF52840_XXAA
+#define APP_CODE_BASE          (0x00026000) // TODO: check SD version
+#define APP_RAM_BASE           (0x20003800)
 #define PAGE_SIZE              (4096)
 #define PAGE_SIZE_LOG2         (12)
 
@@ -88,12 +82,6 @@ extern const uint32_t _stext[];
 #define COMMAND_ADD_BUFFER   (0x04) // add data to write buffer
 #define COMMAND_PING         (0x10) // just ask a response (debug)
 #define COMMAND_START        (0x11) // start the app (debug, unreliable)
-
-#if defined(DFU_TYPE_mbr) || !defined(NRF51)
-#define MBRCONST
-#else
-#define MBRCONST const
-#endif
 
 typedef union {
     struct {
