@@ -23,7 +23,8 @@
  */
 
 
-#include "nrf_uart.h"
+#include "nrf52.h"
+#include "nrf52_bitfields.h"
 #include "dfu.h"
 #include "dfu_uart.h"
 
