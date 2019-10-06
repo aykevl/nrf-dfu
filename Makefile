@@ -22,7 +22,7 @@ flash: build/combined.hex
 
 .PHONY: gdb
 gdb:
-	arm-none-eabi-gdb build/mbr.elf -ex "target remote :2331"
+	arm-none-eabi-gdb build/dfu.elf -ex "target remote :2331"
 
 # Basic flags.
 CFLAGS += -flto -Os -g -mthumb -mcpu=cortex-m4 -Wall -Werror -nostartfiles
@@ -44,13 +44,13 @@ CFLAGS += -DDFU_TYPE_$(DFU_TYPE)=1
 CFLAGS += -DDEBUG=$(DEBUG)
 CFLAGS += -D$(BOARD)
 
-build/combined.hex: lib/$(SD)/$(SD)_softdevice.hex build/mbr.hex
+build/combined.hex: lib/$(SD)/$(SD)_softdevice.hex build/dfu.hex
 	./mergehex.py --pagesize=$(PAGESIZE) $@ $^
 
-build/mbr.hex: build/mbr.elf
-	arm-none-eabi-objcopy -O ihex build/mbr.elf build/mbr.hex
+build/dfu.hex: build/dfu.elf
+	arm-none-eabi-objcopy -O ihex build/dfu.elf build/dfu.hex
 
-build/mbr.elf: build/dfu.o build/dfu_sd.o build/dfu_uart.o build/dfu_ble.o build/startup.o
+build/dfu.elf: build/dfu.o build/dfu_sd.o build/dfu_uart.o build/dfu_ble.o build/startup.o
 	arm-none-eabi-gcc $(CFLAGS) $(LDFLAGS) -o $@ $^
 	arm-none-eabi-size $@
 
