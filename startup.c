@@ -23,6 +23,8 @@
  */
 
 #include <stdint.h>
+#include "nrf52.h"
+#include "nrf_nvic.h"
 
 extern uint32_t _estack;
 extern uint32_t _sidata;
@@ -46,23 +48,20 @@ void uart_write(char *s);
 __attribute__((section(".Default_Handler")))
 void Default_Handler(void) {
     uart_write("Default_Handler\r\n");
-    while (1);
+    NRF_POWER->GPREGRET = 2;
+    sd_nvic_SystemReset();
 }
 
 void HardFault_Handler(void) {
     uart_write("HardFault_Handler\r\n");
-    while (1);
+    NRF_POWER->GPREGRET = 2;
+    sd_nvic_SystemReset();
 }
 #else
 __attribute__((section(".Default_Handler")))
 void Default_Handler(void) {
-    while (1) {
-        // Save battery when accidentally entering an undefined handler.
-        // Does not cost extra flash space, because functions are 4-byte
-        // aligned and this extra instruction increases the size of this
-        // function from 2 to 4 bytes.
-        __asm__ __volatile__("wfi");
-    }
+    NRF_POWER->GPREGRET = 2;
+    sd_nvic_SystemReset();
 }
 void HardFault_Handler (void) __attribute__ ((weak, alias("Default_Handler")));
 #endif

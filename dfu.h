@@ -25,6 +25,7 @@
 
 #pragma once
 
+#include "nrf52_bitfields.h"
 #include "dfu_uart.h"
 
 #if !defined(DEBUG)
@@ -35,6 +36,8 @@
 #define ERROR_REPORTING        (1) // send error when something goes wrong (e.g. flash write fail)
 #define PACKET_CHARACTERISTIC  (1) // add a separate transport characteristic - improves speed but costs 32 bytes
 #define DYNAMIC_INFO_CHAR      (1) // load 'info' characteristic from calculated values
+
+#define DFU_RESET_REASONS (POWER_RESETREAS_RESETPIN_Msk | POWER_RESETREAS_DOG_Msk | POWER_RESETREAS_LOCKUP_Msk)
 
 #if DEBUG
 #define LOG(s) uart_write(s "\r\n")

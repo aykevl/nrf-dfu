@@ -102,22 +102,27 @@ void _start(void) {
     #error Unknown DFU type
 #endif
 
-
     // Check whether there is something that looks like a reset handler at
     // the app ISR vector. If the page has been cleared, it will be
     // 0xffffffff.
-    // Also, check whether GPREGRET is set: if it is, the application has
-    // requested we stay in DFU mode.
+    // Also check for other reasons DFU may be triggered:
+    //   * GPREGRET is set, which means DFU mode was requested
+    //   * The reset reason is suspicious.
     uint32_t *app_isr = (uint32_t*)APP_CODE_BASE;
     uint32_t reset_handler = app_isr[1];
-    if (reset_handler != 0xffffffff && NRF_POWER->GPREGRET == 0) {
+    if (reset_handler != 0xffffffff && NRF_POWER->GPREGRET == 0 && (NRF_POWER->RESETREAS & DFU_RESET_REASONS) == 0) {
         // There is a valid application and the application hasn't
         // requested for DFU mode.
-        LOG("valid Reset_Handler");
+        LOG("jump to application");
         jump_to_app();
     } else {
-        LOG("invalid Reset_Handler or GPREGRET was set");
+        LOG("DFU mode triggered");
     }
+
+    // Clear reset reasons that we've looked at, to avoid getting stuck in
+    // DFU mode.
+    // The dataseet says: "A field is cleared by writing '1' to it."
+    NRF_POWER->RESETREAS = DFU_RESET_REASONS;
 
     // Make sure a reset won't jump to the bootloader again. This only
     // matters if the application requested to go to the bootloader by
