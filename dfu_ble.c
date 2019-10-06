@@ -464,19 +464,7 @@ void ble_send_reply(uint8_t code) {
         .p_data = reply_ok,
     };
     uint32_t err_val = sd_ble_gatts_hvx(ble_command_conn_handle, &hvx_params);
-    if (err_val == BLE_ERROR_INVALID_CONN_HANDLE) {
-        LOG("  notify: BLE_ERROR_INVALID_CONN_HANDLE");
-    } else if (err_val == NRF_ERROR_INVALID_STATE) {
-        LOG("  notify: NRF_ERROR_INVALID_STATE");
-    } else if (err_val == NRF_ERROR_INVALID_ADDR) {
-        LOG("  notify: NRF_ERROR_INVALID_ADDR");
-    } else if (err_val == NRF_ERROR_INVALID_PARAM) {
-        LOG("  notify: NRF_ERROR_INVALID_PARAM");
-    } else if (err_val == BLE_ERROR_INVALID_ATTR_HANDLE) {
-        LOG("  notify: BLE_ERROR_INVALID_ATTR_HANDLE");
-    } else if (err_val == BLE_ERROR_GATTS_INVALID_ATTR_TYPE) {
-        LOG("  notify: BLE_ERROR_GATTS_INVALID_ATTR_TYPE");
-    } else if (err_val != 0) {
+    if (err_val != 0) {
         LOG("  notify: failed to send notification");
     }
 }
